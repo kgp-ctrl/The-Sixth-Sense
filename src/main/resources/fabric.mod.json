@@ -1,0 +1,35 @@
+{
+	"schemaVersion": 1,
+	"id": "sixthsense",
+	"version": "${version}",
+	"name": "The Sixth Sense",
+    "description": "Animated HUD warnings for nearby dangers, a Warden heartbeat compass, and a customizable screen-anchored HUD editor.",
+	"authors": [
+		"Gareyn_"
+	],
+	"contact": {
+        "homepage": "https://modrinth.com/mod/the-sixth-sense",
+        "sources": "https://github.com/kgp-ctrl/The-Sixth-Sense",
+        "issues": "https://github.com/kgp-ctrl/The-Sixth-Sense/issues"
+	},
+	"license": "All Rights Reserved",
+	"icon": "assets/sixthsense/icon.png",
+	"environment": "client",
+	"entrypoints": {
+		"client": [
+			"com.surins.SixthSenseClient"
+		],
+		"modmenu": [
+			"com.surins.SixthSenseModMenuIntegration"
+		]
+	},
+	"mixins": [
+		"SixthSense.mixin.json"
+	],
+	"depends": {
+		"fabricloader": ">=0.19.2",
+		"minecraft": "~1.21.1",
+		"java": ">=21",
+		"fabric-api": "*"
+	}
+}
