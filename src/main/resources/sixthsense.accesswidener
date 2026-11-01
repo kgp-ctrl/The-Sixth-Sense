@@ -1,0 +1,8 @@
+accessWidener v2 named
+accessible class net/minecraft/entity/mob/PhantomEntity$PhantomMovementType
+accessible field net/minecraft/entity/mob/PhantomEntity movementType Lnet/minecraft/entity/mob/PhantomEntity$PhantomMovementType;
+accessible method net/minecraft/client/render/GameRenderer getFov (Lnet/minecraft/client/render/Camera;FZ)D
+accessible method net/minecraft/client/render/RenderLayer$MultiPhase getPhases ()Lnet/minecraft/client/render/RenderLayer$MultiPhaseParameters;
+accessible field net/minecraft/client/render/RenderLayer$MultiPhaseParameters texture Lnet/minecraft/client/render/RenderPhase$TextureBase;
+accessible method net/minecraft/client/render/RenderPhase$TextureBase getId ()Ljava/util/Optional;
+accessible field net/minecraft/client/render/RenderLayer$MultiPhaseParameters layering Lnet/minecraft/client/render/RenderPhase$Layering;

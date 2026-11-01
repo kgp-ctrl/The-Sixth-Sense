@@ -1,0 +1,55 @@
+{
+  "vertex": "sixthsense:sense_screen",
+  "fragment": "sixthsense:sense_screen",
+  "samplers": [
+    {
+      "name": "Sampler0"
+    }
+  ],
+  "attributes": [
+    "Position"
+  ],
+  "uniforms": [
+    {
+      "name": "Strength",
+      "type": "float",
+      "count": 1,
+      "values": [
+        0
+      ]
+    },
+    {
+      "name": "NoiseStep",
+      "type": "float",
+      "count": 1,
+      "values": [
+        0
+      ]
+    },
+    {
+      "name": "ScreenSize",
+      "type": "float",
+      "count": 2,
+      "values": [
+        1,
+        1
+      ]
+    },
+    {
+      "name": "StaticStrength",
+      "type": "float",
+      "count": 1,
+      "values": [
+        0
+      ]
+    },
+    {
+      "name": "Blackout",
+      "type": "float",
+      "count": 1,
+      "values": [
+        0
+      ]
+    }
+  ]
+}

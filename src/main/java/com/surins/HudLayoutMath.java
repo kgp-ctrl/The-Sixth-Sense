@@ -9,6 +9,15 @@ final class HudLayoutMath {
         return 1.0f + 0.15f * (float) Math.max(0.0, Math.min(1.0, 4.0 - guiScale));
     }
 
+    /** Small captions do not inherit the 3x artwork boost or grow beyond the normal 3x text size. */
+    static float annotationScale(float iconScale,double guiScale,int textWidth,int fontHeight,boolean distance) {
+        float artworkSize=16*iconScale;
+        float base=0.60f*iconScale/scaleCompensation(guiScale);
+        float fitted=Math.min(base,Math.min(artworkSize*(distance?.72f:.86f)/Math.max(1,textWidth),
+                artworkSize*.50f/Math.max(1,fontHeight)));
+        return fitted*(float)Math.min(1,3/Math.max(1,guiScale));
+    }
+
     static float nearestAnchor(float position, float elementSize, int screenSize) {
         float center = position + elementSize / 2.0f;
         return center < screenSize * 0.25f ? 0.0f : center > screenSize * 0.75f ? 1.0f : 0.5f;

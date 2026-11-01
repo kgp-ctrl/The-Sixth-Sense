@@ -59,11 +59,8 @@ public class SixthSenseClient implements ClientModInitializer {
     private static final int GHAST_TEXTURE_HEIGHT = HudCharacterAnimation.TEXTURE_HEIGHT;
     private static final int SHULKER_TEXTURE_HEIGHT = HudCharacterAnimation.TEXTURE_HEIGHT;
     private static final int WARDEN_TEXTURE_HEIGHT = 160;
-    private static final float GHAST_DISTANCE_TEXT_SCALE = 0.62f;
 
-    private static KeyBinding toggleKeyBinding;
     private static KeyBinding raidHudEditorKeyBinding;
-    private static boolean isModActive = true;
     
     // YENİ: Mixin tarafından kontrol edilecek mevcut parlayan varlık
     public static Entity currentGlowingEntity = null;
@@ -213,15 +210,12 @@ public class SixthSenseClient implements ClientModInitializer {
     public void onInitializeClient() {
         SixthSenseConfig.load();
         WardenThreatTracker.initialize();
+        PhantomThreatTracker.initialize();
+        ArcTargetRenderer.initialize();
+        MultiplayerNotice.initialize();
+        SenseAbility.initialize();
         
         explosionThreat.fadeType = FadeType.FAST_FADE;
-
-        toggleKeyBinding = KeyBindingHelper.registerKeyBinding(new KeyBinding(
-                "key.sixthsense.toggle",
-                InputUtil.Type.KEYSYM,
-                GLFW.GLFW_KEY_KP_0,
-                "category.sixthsense"
-        ));
 
         raidHudEditorKeyBinding = KeyBindingHelper.registerKeyBinding(new KeyBinding(
                 "key.sixthsense.editor",
@@ -231,7 +225,10 @@ public class SixthSenseClient implements ClientModInitializer {
         ));
 
         ClientTickEvents.END_CLIENT_TICK.register(client -> {
+            SenseAbility.tick(client);
             GhastThreatTracker.beginTick(client);
+            PhantomThreatTracker.tick(client);
+            BowAimAssist.tick(client);
             if (threatWorld != client.world) {
                 threatWorld = client.world;
                 for (ThreatState state : new ThreatState[]{bowThreat, crossbowThreat, explosionThreat,
@@ -247,19 +244,22 @@ public class SixthSenseClient implements ClientModInitializer {
             }
             while (raidHudEditorKeyBinding.wasPressed()) {
                 if (client.currentScreen == null && client.player != null && client.world != null) {
-                    client.setScreen(new SixthSenseHudEditorScreen());
+                    if (net.minecraft.client.gui.screen.Screen.hasShiftDown()) SenseAbility.request(client);
+                    else client.setScreen(new SixthSenseHudEditorScreen());
                 }
             }
 
-            while (toggleKeyBinding.wasPressed()) {
-                isModActive = !isModActive;
-                if (client.player != null) {
-                    client.player.sendMessage(SixthSenseLanguage.text(isModActive ? "message.enabled" : "message.disabled"), true);
-                }
-            }
-
-            if (!isModActive || client.player == null || client.world == null) {
+            if (!warningsAllowed(client)) {
+                WardenThreatTracker.suspend();
                 currentGlowingEntity = null;
+                for (ThreatState state : new ThreatState[]{bowThreat, crossbowThreat, explosionThreat,
+                        ghastThreat, shulkerThreat, wardenThreat, raidThreat}) {
+                    state.active = false;
+                    state.lastSeenTime = 0;
+                    state.trackedEntity = null;
+                }
+                raidMobAlive = false;
+                isExplodingAnim = false;
                 return;
             }
 
@@ -272,7 +272,8 @@ public class SixthSenseClient implements ClientModInitializer {
             boolean tickHasShulker = false; int shulkerCount = 0;
             boolean tickHasWarden = false; double closestWardenDist = 48.0; double wardenX = 0, wardenY = 0, wardenZ = 0;
             WardenEntity selectedWarden = null;
-            UUID targetingWarden = WardenThreatTracker.targetingWarden(client);
+            UUID targetingWarden = SixthSenseConfig.instance.enableWardenWarning ? WardenThreatTracker.targetingWarden(client) : null;
+            if (!SixthSenseConfig.instance.enableWardenWarning) WardenThreatTracker.suspend();
             UUID recentAttacker = WardenThreatTracker.recentAttacker(client);
             int selectedWardenPriority = -1;
             
@@ -286,41 +287,32 @@ public class SixthSenseClient implements ClientModInitializer {
             double closestCrossbowSqDist = 24.0 * 24.0;
             double closestGhastSqDist = 64.0 * 64.0;
             double closestWardenSqDist = 48.0 * 48.0;
-            double closestRaidSqDist = 128.0 * 128.0;
 
-            boolean isRaidActiveOnClient = isRaidActive(client);
+            boolean isRaidActiveOnClient = SixthSenseConfig.instance.enableRaidWarning && isRaidActive(client);
+            RaidSelection<RaiderEntity> raidSelection = new RaidSelection<>();
 
-            Box raidSearchBox = client.player.getBoundingBox().expand(128.0);
-            List<Entity> raidEntities = client.world.getOtherEntities(client.player, raidSearchBox);
+            double searchRange = isRaidActiveOnClient ? 128 : SixthSenseConfig.instance.enableGhastWarning ? 64
+                    : SixthSenseConfig.instance.enableWardenWarning ? 48 : 24;
+            Box raidSearchBox = client.player.getBoundingBox().expand(searchRange);
+            var config = SixthSenseConfig.instance;
+            boolean anyNearbyWarning = isRaidActiveOnClient || config.enableBowWarning || config.enableCrossbowWarning
+                    || config.enableExplosionWarning || config.enableGhastWarning || config.enableShulkerWarning || config.enableWardenWarning;
+            List<Entity> raidEntities = anyNearbyWarning ? client.world.getOtherEntities(client.player, raidSearchBox) : List.of();
             for (Entity entity : raidEntities) {
                 double sqDistance = client.player.squaredDistanceTo(entity);
 
                 if (entity instanceof LivingEntity living) {
-                    boolean canSeeMe = hasLineOfSight(living, client);
+                    if (!living.isAlive()) continue;
                     boolean isThreat = (living instanceof Monster) || (living instanceof PlayerEntity);
-
-                    if (SixthSenseConfig.instance.enableRaidWarning && living instanceof RaiderEntity raider && isRaidActiveOnClient) {
-                        activeRaidMobExists = true;
-                        
-                        if (sqDistance < closestRaidSqDist) {
-                            closestRaidSqDist = sqDistance;
-                            raidX = raider.getX();
-                            raidY = raider.getY();
-                            raidZ = raider.getZ();
-                            closestRaidDist = Math.sqrt(closestRaidSqDist);
-                            closestRaidEntity = raider;
-                            
-                            if (raider.hasCustomName() && raider.getCustomName() != null) {
-                                raidMobName = raider.getCustomName().getString();
-                            } else {
-                                raidMobName = raider.getType().getName().getString();
-                            }
-                            
-                            if (canSeeMe) {
-                                raidMobVisible = true;
-                            }
-                        }
-                    }
+                    boolean raidCandidate = isRaidActiveOnClient && living instanceof RaiderEntity
+                            && raidSelection.accepts(sqDistance, true);
+                    boolean armed = isThreat && (config.enableBowWarning && living.isHolding(Items.BOW)
+                            || config.enableCrossbowWarning && living.isHolding(Items.CROSSBOW));
+                    boolean needsSight = raidCandidate
+                            || sqDistance <= 24 * 24 && (armed || living instanceof CreeperEntity && config.enableExplosionWarning)
+                            || sqDistance <= 64 * 64 && living instanceof GhastEntity && SixthSenseConfig.instance.enableGhastWarning;
+                    boolean canSeeMe = needsSight && hasLineOfSight(living, client);
+                    if (raidCandidate) raidSelection.select((RaiderEntity) living, sqDistance, true, canSeeMe);
 
                     if (isThreat && canSeeMe && sqDistance <= 24.0 * 24.0) {
                         ItemStack mainHand = living.getMainHandStack();
@@ -377,7 +369,7 @@ public class SixthSenseClient implements ClientModInitializer {
                         }
                     }
 
-                    if (living instanceof GhastEntity ghast) GhastThreatTracker.observe(ghast);
+                    if (SixthSenseConfig.instance.enableGhastWarning && living instanceof GhastEntity ghast) GhastThreatTracker.observe(ghast);
                     if (canSeeMe && SixthSenseConfig.instance.enableGhastWarning && living instanceof GhastEntity ghast && sqDistance <= 64.0 * 64.0) {
                         if (ghast.isShooting() || GhastThreatTracker.recentlyFired(ghast)) {
                             tickHasGhast = true;
@@ -434,6 +426,14 @@ public class SixthSenseClient implements ClientModInitializer {
                 isExplodingAnim = false;
             }
             
+            RaiderEntity selectedRaider = raidSelection.target();
+            activeRaidMobExists = selectedRaider != null;
+            if (selectedRaider != null) {
+                raidMobVisible = raidSelection.visible(); closestRaidEntity = selectedRaider;
+                raidX = selectedRaider.getX(); raidY = selectedRaider.getY(); raidZ = selectedRaider.getZ();
+                closestRaidDist = client.player.distanceTo(selectedRaider);
+                raidMobName = selectedRaider.getName().getString();
+            }
             raidMobAlive = activeRaidMobExists;
 
             bowThreat.update(tickHasBow, maxBowTime, bowCount, 0, 0, 0, 0, 0);
@@ -455,10 +455,10 @@ public class SixthSenseClient implements ClientModInitializer {
         });
 
         HudRenderCallback.EVENT.register((drawContext, tickDelta) -> {
-            if (!isModActive) return;
-
             MinecraftClient client = MinecraftClient.getInstance();
-            if (client.player == null) return;
+            if (!warningsAllowed(client) || client.options.hudHidden || client.currentScreen != null) return;
+
+            PhantomThreatTracker.render(drawContext, client, tickDelta.getTickDelta(false));
 
             int width = client.getWindow().getScaledWidth();
             int height = client.getWindow().getScaledHeight();
@@ -468,7 +468,7 @@ public class SixthSenseClient implements ClientModInitializer {
 
             // --- RAID GÖSTERGESİ ---
             if (raidThreat.shouldRenderRaid(raidMobAlive) && SixthSenseConfig.instance.enableRaidWarning) {
-                float alpha = raidThreat.getRaidAlpha(raidMobAlive);
+                float alpha = raidThreat.getRaidAlpha(raidMobAlive) * SixthSenseConfig.instance.warningOpacity;
                 
                 int textAlpha = (int)(Math.max(0.1f, alpha) * 255);
                 int textColor = (textAlpha << 24) | 0xFFFFFF;
@@ -571,21 +571,9 @@ public class SixthSenseClient implements ClientModInitializer {
                     float scale = pos.displayScale();
                     float drawX = pos.resolveX(client.getWindow().getScaledWidth(), ORIGINAL_FRAME_SIZE * scale, lastX);
                     float drawY = pos.resolveY(client.getWindow().getScaledHeight(), ORIGINAL_FRAME_SIZE * scale, targetScreenY);
-                    float alpha = ghastThreat.getAlpha();
+                    float alpha = ghastThreat.getAlpha() * SixthSenseConfig.instance.warningOpacity;
                     String distanceText = (int)ghastThreat.distance + "m";
-                    float iconSize = ORIGINAL_FRAME_SIZE * scale;
-                    int nativeWidth = Math.max(1, client.textRenderer.getWidth(distanceText));
-                    int nativeHeight = Math.max(1, client.textRenderer.fontHeight);
-                    float textScale = Math.min(GHAST_DISTANCE_TEXT_SCALE * scale,
-                            Math.min(iconSize * 0.72f / nativeWidth, iconSize * 0.50f / nativeHeight));
-                    float textX = drawX + iconSize - nativeWidth * textScale - 0.5f;
-                    float textY = drawY + iconSize - nativeHeight * textScale - 0.5f;
-                    drawContext.getMatrices().push();
-                    int textColor = ((int)(alpha * 255) << 24) | 0xFFFFFF;
-                    drawContext.getMatrices().translate(textX, textY, 0);
-                    drawContext.getMatrices().scale(textScale, textScale, 1.0f);
-                    drawContext.drawText(client.textRenderer, distanceText, 0, 0, textColor, true);
-                    drawContext.getMatrices().pop();
+                    HudAnnotationRenderer.draw(drawContext,distanceText,drawX,drawY,scale,alpha,true);
                 }
             }
 
@@ -595,7 +583,7 @@ public class SixthSenseClient implements ClientModInitializer {
             }
 
             if (wardenThreat.shouldRender()) {
-                float alpha = wardenThreat.getAlpha();
+                float alpha = wardenThreat.getAlpha() * SixthSenseConfig.instance.warningOpacity;
 
                 SixthSenseConfig.AnimPos pos = SixthSenseConfig.instance.wardenPos;
                 
@@ -641,7 +629,7 @@ public class SixthSenseClient implements ClientModInitializer {
                 drawContext.drawTexture(WARNING_ARROW, -halfSize, -halfSize, 0, 0, ORIGINAL_FRAME_SIZE, ORIGINAL_FRAME_SIZE, TEXTURE_WIDTH, ORIGINAL_FRAME_SIZE);
                 drawContext.getMatrices().pop();
 
-                if (heartbeat.motionBlurAlpha() > 0.0f) {
+                if (!SixthSenseConfig.instance.reduceMotion && heartbeat.motionBlurAlpha() > 0.0f) {
                     drawContext.setShaderColor(1.0f, 1.0f, 1.0f, alpha * heartbeat.motionBlurAlpha());
                     drawContext.getMatrices().push();
                     drawContext.getMatrices().translate(centerX - heartbeat.jitterX * 0.6f, centerY - heartbeat.jitterY * 0.6f, 0);
@@ -653,8 +641,8 @@ public class SixthSenseClient implements ClientModInitializer {
 
                 drawContext.setShaderColor(1.0f, 1.0f, 1.0f, alpha);
                 drawContext.getMatrices().push();
-                drawContext.getMatrices().translate(centerX + heartbeat.jitterX, centerY + heartbeat.jitterY, 0);
-                float heartScale = scale * heartbeat.scaleMultiplier;
+                drawContext.getMatrices().translate(centerX + (SixthSenseConfig.instance.reduceMotion ? 0 : heartbeat.jitterX), centerY + (SixthSenseConfig.instance.reduceMotion ? 0 : heartbeat.jitterY), 0);
+                float heartScale = scale * (SixthSenseConfig.instance.reduceMotion ? .7f : heartbeat.scaleMultiplier);
                 drawContext.getMatrices().scale(heartScale, heartScale, 1.0f);
                 drawContext.drawTexture(WARNING_WARDEN, -halfSize, -halfSize, 0, vOffset, ORIGINAL_FRAME_SIZE, ORIGINAL_FRAME_SIZE, TEXTURE_WIDTH, WARDEN_TEXTURE_HEIGHT);
                 drawContext.getMatrices().pop();
@@ -680,9 +668,17 @@ public class SixthSenseClient implements ClientModInitializer {
         });
     }
 
+    public static boolean warningsAllowed(MinecraftClient client) {
+        return client.world != null && client.player != null && HudVisibilityPolicy.allows(
+                SixthSenseConfig.instance.hudEnabled, SixthSenseConfig.instance.showInCreative,
+                client.player.isCreative(), client.player.isSpectator(), client.player.isAlive());
+    }
+
     private static float drawWarningWithLayout(net.minecraft.client.gui.DrawContext drawContext, MinecraftClient client, Identifier texture, ThreatState state, 
                                     SixthSenseConfig.AnimPos pos, int maxFrames, int frameSize, int textureWidth, int textureHeight, float ratioOverride, boolean booleanCount, float dynX, float dynY) {
-        float alpha = state.getAlpha();
+        float alpha = state.getAlpha() * SixthSenseConfig.instance.warningOpacity;
+        if (SixthSenseConfig.instance.prioritizeThreats && (texture.equals(WARNING_BOW) || texture.equals(WARNING_CROSSBOW))
+                && state.drawTime == 0) alpha *= .45f;
         int frame;
         if (texture.equals(WARNING_BOOM)) {
             if (isExplodingAnim) {
@@ -760,28 +756,6 @@ public class SixthSenseClient implements ClientModInitializer {
 
     private static void drawWarningCount(net.minecraft.client.gui.DrawContext drawContext, MinecraftClient client,
                                          int count, float drawX, float drawY, float iconScale, float alpha) {
-        String countText = String.valueOf(count);
-        float iconSize = ORIGINAL_FRAME_SIZE * iconScale;
-        float maxTextWidth = iconSize * 0.86f;
-        float maxTextHeight = iconSize * 0.62f;
-
-        float textScale = Math.min(0.76f * iconScale, maxTextHeight / client.textRenderer.fontHeight);
-        textScale = Math.min(textScale, maxTextWidth / client.textRenderer.getWidth(countText));
-
-        // Keep the counter readable without letting it overwhelm its icon at large GUI scales.
-        float guiScale = (float) client.getWindow().getScaleFactor();
-        textScale *= Math.min(1.0f, 3.0f / Math.max(1.0f, guiScale));
-
-        float textWidth = client.textRenderer.getWidth(countText) * textScale;
-        float textHeight = client.textRenderer.fontHeight * textScale;
-        float textX = drawX + iconSize - textWidth - 0.5f;
-        float textY = drawY + iconSize - textHeight - 0.5f;
-        int textColor = ((int) (alpha * 255) << 24) | 0xFFFFFF;
-
-        drawContext.getMatrices().push();
-        drawContext.getMatrices().translate(textX, textY, 0);
-        drawContext.getMatrices().scale(textScale, textScale, 1.0f);
-        drawContext.drawText(client.textRenderer, countText, 0, 0, textColor, true);
-        drawContext.getMatrices().pop();
+        HudAnnotationRenderer.draw(drawContext,String.valueOf(count),drawX,drawY,iconScale,alpha,false);
     }
 }

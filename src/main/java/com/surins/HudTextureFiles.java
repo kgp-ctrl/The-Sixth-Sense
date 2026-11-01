@@ -9,15 +9,19 @@ import java.util.List;
 
 /** The reload button can read only these PNGs, never classes or other resources. */
 final class HudTextureFiles {
-    record Sprite(String name, int width, int height) {
-        String resourcePath() { return "textures/gui/" + name + ".png"; }
+    record Sprite(String name, int width, int height, String directory) {
+        Sprite(String name, int width, int height) { this(name,width,height,"gui"); }
+        String resourcePath() { return "textures/" + directory + "/" + name + ".png"; }
     }
 
     static final List<Sprite> SPRITES = List.of(
             new Sprite("warning_bow", 32, 256), new Sprite("warning_crossbow", 32, 256),
             new Sprite("warning_boom", 160, 64), new Sprite("warning_ghast", 32, 512),
             new Sprite("warning_spark", 32, 512), new Sprite("warning_warden", 16, 160),
-            new Sprite("warning_arrow", 16, 16), new Sprite("warning_warden_thorns", 64, 128));
+            new Sprite("warning_arrow", 16, 16), new Sprite("phantom_crosshair", PhantomCrosshair.TEXTURE_WIDTH, PhantomCrosshair.TEXTURE_HEIGHT),
+            new Sprite("settings", 124, 124, "settings"), new Sprite("grid", 63, 63, "settings"),
+            new Sprite("debug", 67, 66, "settings"),
+            new Sprite("warning_warden_thorns", 64, 128));
     private static final int MAX_BYTES = 2 * 1024 * 1024;
 
     @FunctionalInterface

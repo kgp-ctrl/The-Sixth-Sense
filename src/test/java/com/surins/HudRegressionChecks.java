@@ -15,12 +15,17 @@ public final class HudRegressionChecks {
         animationIsIndependentOfUptimeAndFrameRate();
         anchorsSurviveGuiScaleChangesAndSaving();
         scaleCompensationIsModest();
+        annotationSizing();
         translationsAreComplete();
         characterSpritesMatchRenderer();
         thornSpriteIsEditableAndAligned();
         GameplayHudRegressionChecks.run();
         WardenThreatRegressionChecks.run();
         HudTextureReloadChecks.run();
+        PhantomRegressionChecks.run();
+        CrosshairRegressionChecks.run();
+        SenseRegressionChecks.run();
+        SenseNetworkChecks.run();
         System.out.println("HUD regression checks passed: heartbeat continuity, anchors, languages, sprites, weapon poses, Ghast reactions, Warden layout, compass and damage feedback.");
     }
 
@@ -102,6 +107,21 @@ public final class HudRegressionChecks {
         close(legacy.resolveY(270, originalSize, 0), 50, "Legacy Y was lost");
     }
 
+    private static void annotationSizing() {
+        for(boolean distance:new boolean[]{false,true}) {
+            for(int gui=1;gui<=6;gui++) {
+                float icon=.7f*HudLayoutMath.scaleCompensation(gui);
+                float scale=HudLayoutMath.annotationScale(icon,gui,12,9,distance);
+                close(scale*gui,.42f*Math.min(gui,3),"Number grew with artwork compensation or large GUI scale");
+                for(int width:new int[]{5,12,20,40,80}) {
+                    float fitted=HudLayoutMath.annotationScale(icon,gui,width,9,distance);
+                    require(fitted>0&&Float.isFinite(fitted),"Invalid annotation size");
+                    require(width*fitted<=16*icon*(distance?.72f:.86f)+.001,"Long number escaped its icon");
+                }
+            }
+        }
+    }
+
     private static void scaleCompensationIsModest() {
         close(HudLayoutMath.scaleCompensation(4), 1, "4x sizing changed");
         close(HudLayoutMath.scaleCompensation(3), 1.15f, "3x sizing was not increased by 15%");
@@ -111,13 +131,21 @@ public final class HudRegressionChecks {
     private static void translationsAreComplete() throws Exception {
         JsonObject english = readLanguage("en_us");
         Set<String> keys = english.keySet();
-        require(keys.size() == 66, "Unexpected English translation coverage");
-        for (String code : new String[]{"zh_cn", "hi_in", "es_es", "ar_sa", "tr_tr", "az_az"}) {
+        require(keys.containsAll(Set.of("key.sixthsense.editor", "sixthsense.info.general",
+                "sixthsense.technical.enabled", "sixthsense.technical.creative",
+                "sixthsense.technical.phantom_size", "sixthsense.info.phantom", "sixthsense.info.aim",
+                "sixthsense.config.general", "sixthsense.config.aim",
+                "sixthsense.config.reset_category")), "Missing core translations");
+        require(!keys.contains("sixthsense.config.phantom_glow"), "Removed Phantom outline setting returned");
+        for (String code : new String[]{"en_us", "tr_tr", "de_de", "fr_fr", "es_es", "ja_jp", "zh_cn"}) {
             JsonObject translated = readLanguage(code);
             require(translated.keySet().equals(keys), "Missing/extra translation keys in " + code);
             for (String key : keys) {
                 String value = translated.get(key).getAsString();
                 require(!value.isBlank(), "Empty translation: " + code + ":" + key);
+                require(!value.contains("\u00c3\u00bc") && !value.contains("\u00c4\u00b1")
+                                && !value.contains("\u00c5\u0178") && !value.contains("\u00e2\u20ac"),
+                        "UTF-8 text was decoded with the wrong charset: " + code + ":" + key);
                 require(placeholders(value) == placeholders(english.get(key).getAsString()),
                         "Formatting arguments differ: " + code + ":" + key);
             }

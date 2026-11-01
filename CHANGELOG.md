@@ -1,5 +1,16 @@
 # Changelog
 
+## 1.2.0 — Minecraft 1.21.1 / Fabric
+
+- Added Sixth Sense: reveal nearby threats, move quietly and prepare a stronger strike from behind.
+- Requires level 20; costs 109 XP. Lasts 60 seconds within 52 blocks. Sleep through one night before using it again.
+- Added multiplayer support with the mod on both sides. Experience, duration and recovery are managed separately for each player.
+- Added a slim duration indicator and refined sunlight sensitivity during eye strain.
+- Added optional inner voice with a compact pixel-art panel and a sphere that forms from the first heart.
+- Refined Phantom warnings and distant bow-hit feedback, including wooden buttons and End crystals.
+- Fixed movement when opening Mod Menu settings, camera cleanup and animation timing.
+- Improved rendering efficiency, targeting, settings reliability and the seven-language guide.
+
 ## 1.1.1 — Minecraft 1.21.1 / Fabric
 
 - Added a Debug button to reload only the eight HUD PNGs, with direct development-source reads, optional local PNG overrides, and validation before replacing existing textures.

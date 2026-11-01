@@ -9,7 +9,7 @@ import org.lwjgl.glfw.GLFW;
 /** A compact, scrollable checklist for testing the HUD in a running world. */
 final class HudFeatureInfoScreen extends Screen {
     private static final String[] SECTIONS = {
-            "bow", "crossbow", "explosion", "ghast", "shulker", "warden", "thorns",
+            "bow", "crossbow", "explosion", "ghast", "shulker", "phantom", "aim", "sense", "stealth", "presence", "recovery", "voice", "warden", "thorns",
             "raid", "layout", "editor", "debug", "reload", "settings", "language", "general"
     };
     private final Screen parent;
@@ -47,23 +47,23 @@ final class HudFeatureInfoScreen extends Screen {
 
     @Override
     public void render(DrawContext context, int mouseX, int mouseY, float delta) {
-        context.fill(0, 0, width, height, 0xF0181D22);
-        context.drawCenteredTextWithShadow(textRenderer, title, width / 2, 8, 0xFFE6D5AD);
-        context.drawCenteredTextWithShadow(textRenderer, SixthSenseLanguage.text("info.help"), width / 2, 23, 0xFFB7C0C4);
+        super.renderBackground(context,mouseX,mouseY,delta);
+        context.drawCenteredTextWithShadow(textRenderer, title, width / 2, 8, VanillaUi.TEXT);
+        context.drawCenteredTextWithShadow(textRenderer, SixthSenseLanguage.text("info.help"), width / 2, 23, VanillaUi.MUTED);
         int left = Math.max(12, (width - 650) / 2);
         int textWidth = Math.max(1, width - left * 2 - 10);
         // Recompute before clamping so a GUI-scale/window change preserves a valid viewport.
         contentHeight = 0;
         for (String section : SECTIONS) {
-            contentHeight += textRenderer.wrapLines(SixthSenseLanguage.text("info." + section), textWidth).size() * 12 + 9;
+            contentHeight += SixthSenseLanguage.wrap(textRenderer, SixthSenseLanguage.text("info." + section), textWidth).size() * 12 + 9;
         }
         scrollBy(0);
         context.enableScissor(left, top(), width - left, bottom());
         int y = top() - scroll;
         for (String section : SECTIONS) {
             boolean heading = true;
-            for (var line : textRenderer.wrapLines(SixthSenseLanguage.text("info." + section), textWidth)) {
-                context.drawTextWithShadow(textRenderer, line, left, y, heading ? 0xFFE6D5AD : 0xFFD0D8DC);
+            for (var line : SixthSenseLanguage.wrap(textRenderer, SixthSenseLanguage.text("info." + section), textWidth)) {
+                context.drawTextWithShadow(textRenderer, line, left, y, heading ? VanillaUi.ACCENT : VanillaUi.TEXT);
                 heading = false;
                 y += 12;
             }
@@ -74,8 +74,8 @@ final class HudFeatureInfoScreen extends Screen {
         if (contentHeight > viewport) {
             int thumbHeight = Math.max(8, viewport * viewport / contentHeight);
             int thumbY = top() + (viewport - thumbHeight) * scroll / (contentHeight - viewport);
-            context.fill(width - left - 3, top(), width - left, bottom(), 0xFF303A40);
-            context.fill(width - left - 3, thumbY, width - left, thumbY + thumbHeight, 0xFFC4B387);
+            context.fill(width - left - 3, top(), width - left, bottom(), VanillaUi.BORDER);
+            context.fill(width - left - 3, thumbY, width - left, thumbY + thumbHeight, VanillaUi.ACCENT);
         }
         super.render(context, mouseX, mouseY, delta);
     }

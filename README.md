@@ -1,79 +1,49 @@
 # The Sixth Sense
 
-**A little warning. A little more time to react.**
+Compact, animated warnings for nearby danger, with a customizable HUD and an active Sixth Sense ability.
 
-The Sixth Sense gives nearby danger a visual cue: a drawing bow, an approaching explosion, a circling Shulker bullet, or a Warden's beating heart. Small, expressive pixel animations help you read the moment without filling your screen.
+**Minecraft 1.21.1 · Fabric · 1.2.0**
 
-This source tree targets **Minecraft Java 1.21.1 · Fabric · mod version 1.1.1**. Features in other published Minecraft or loader versions may differ.
+[Modrinth](https://modrinth.com/mod/the-sixth-sense) · [CurseForge](https://www.curseforge.com/minecraft/mc-mods/sixth-sense) · [Report an issue](https://github.com/kgp-ctrl/The-Sixth-Sense/issues)
 
-[Download on Modrinth](https://modrinth.com/mod/the-sixth-sense) · [Download on CurseForge](https://www.curseforge.com/minecraft/mc-mods/sixth-sense)
+## Features
 
-## What it shows
+- Animated warnings for bows, crossbows, explosions, Ghasts, Shulkers and Phantoms.
+- A Warden heartbeat compass and a raid locator.
+- Distant bow-hit predictions for creatures, wooden buttons and End crystals. For curved shots, creatures below the crosshair can glow to indicate estimated damage.
+- A movable, resizable HUD with animation previews and reduced motion.
+- Optional inner voice, off by default under **Settings → Special**.
 
-| Warning | What to look for |
-| --- | --- |
-| Bow & crossbow | Nearby armed mobs and players, with weapon animations reflecting observed drawing and charging states. |
-| Explosion | A fuse-driven warning for Creepers, primed TNT, and ignited TNT minecarts. |
-| Ghast | A floating head whose mouth follows charging and firing, with an optional nearby-threat distance readout. |
-| Shulker | A shell-less head and orbiting projectile, with a count of nearby Shulker bullets. |
-| Warden | A centered heartbeat, a smoothly turning compass, and dark thorns that react to targeting and Warden hits. Distance text is optional. |
-| Raid | A locator showing a nearby raider's name, coordinates, direction, and distance during a raid, with configurable entity highlighting. |
+## Sixth Sense
 
-Warnings use entities and states available to your client. A nearby weapon or projectile alert does not by itself mean that its owner has selected you as its target.
+Press **Shift + H** while no creature is targeting you. Requires **level 20** and costs **109 XP**, equivalent to going from level 20 to 18. The cost stays fixed at higher levels.
 
-The Warden heart holds the center of the automatic warning row while other alerts arrange themselves beside it. Custom positions remain yours to choose. Thorns appear smoothly over one second when targeted; a Warden hit draws them inward and shrinks them slightly before they release. Their tips turn blood red as health falls. Exact targeting is available in singleplayer; on vanilla multiplayer servers, the reticle gives confirmed Warden-hit feedback because the server does not send target identity to clients.
+For **60 seconds**, reveal threats within **52 blocks**, move 10% faster and become harder to spot. Threats hidden more than 24 blocks below are excluded; open drops keep the full range. A slim hotbar indicator shows the remaining time.
 
-## Make the HUD yours
-
-Press **H** in a world to open the HUD editor. Drag individual elements, scroll to resize them, and use the optional grid to line them up. Saved positions anchor to a screen edge or the center, so changing GUI scale preserves their reference point. A size adjustment at 3× GUI scale keeps the small animations readable.
-
-| Control | Action |
-| --- | --- |
-| H | Open the HUD editor |
-| Drag / mouse wheel | Move / resize an element |
-| Grid | Toggle alignment guides and snapping |
-| Debug | Preview animations by hovering over an element |
-| Reload images (top-right in Debug) | Reread the mod's HUD PNGs without leaving the world or reloading code |
-| i (under Reload images) | Open a brief, scrollable checklist of every feature; Esc returns |
-| R | Reset the selected element |
-| Shift + R | Open the reset-all confirmation |
-| Esc | Save and close the editor |
-| Numpad 0 | Toggle The Sixth Sense HUD |
-
-Both keybindings can be reassigned in Minecraft's Controls menu. Individual warning toggles, distance options, and the raid highlight setting are available through **Mod Menu with Cloth Config** or `config/sixthsense.json`.
-
-The interface follows Minecraft's selected language. Translations are included for **English, Simplified Chinese, Hindi, Spanish, Arabic, Turkish, and Azerbaijani**, with English as the fallback.
+Sneak behind an unaware creature, jump and land a fully charged sword hit while falling to deal double damage. After using the ability, **sleep through one night** to recover. Until then, direct sunlight strains your eyes; shade or a carved pumpkin protects them.
 
 ## Install
 
-1. Install Fabric Loader for **Minecraft 1.21.1** and Fabric API.
-2. Put the matching The Sixth Sense JAR in your instance's `mods` folder.
-3. Optionally install **Mod Menu and Cloth Config** for the settings screen. The H-key layout editor works independently.
+Requires **Java 21+**, **Fabric Loader 0.19.2+** and **Fabric API for 1.21.1**. Put the mod in `mods`. Mod Menu is optional; Cloth Config is not required.
 
-This is a client-side mod; install it on the client. Minecraft 1.21.1 uses Java 21 or newer. The exact loader requirement is recorded in [`fabric.mod.json`](src/main/resources/fabric.mod.json).
+- **Singleplayer:** all features are available.
+- **Multiplayer:** install the matching mod and Fabric API on both sides for Sixth Sense. Warnings still work on servers without the mod, though some rely on estimates.
 
-## Build from source
+## Controls
 
-Use JDK 25 (the CI version) or another compatible JDK with Java 21 compilation support. The output targets Java 21. On Windows:
+| Key | Action |
+| --- | --- |
+| H | HUD editor and settings |
+| Shift + H | Activate Sixth Sense |
+| Drag / scroll | Move / resize an icon |
+| G / D | Grid / animation previews |
+| R / Shift + R | Reset one / all positions |
+| Esc | Save and close |
 
-```powershell
-.\gradlew.bat build
-```
+The in-game guide covers individual warnings and options. Languages: English, Turkish, German, French, Spanish, Japanese and Simplified Chinese.
 
-On Linux or macOS:
+## Development
 
-```sh
-./gradlew build
-```
+Run `gradlew check` with a compatible JDK for automated checks, or `gradlew build` to create the mod in `build/libs/`. Use the normal JAR, not the sources JAR. Code changes require a restart; **Reload images** refreshes supported HUD PNGs in-game.
 
-The build runs the HUD regression checks and writes the mod to `build/libs/`. Install the normal JAR, rather than the `-sources` JAR. These checks cover animation and layout logic; they do not replace visual testing in Minecraft.
-
-`src/main` contains the mod's code and assets. `src/test` contains automated regression checks run by the build and CI; these are not included in the playable JAR. The explosion and Warden-heart sprites retain the author's original artwork.
-
-The Debug image-reload button reads edited PNGs directly from `src/main/resources` in development. Installed builds can use PNG overrides under `config/sixthsense/visuals/textures/gui/`; missing overrides use the active resource pack/mod. Only the eight HUD images are refreshed. Invalid files leave the current images in place. The thorn image is `src/main/resources/assets/sixthsense/textures/gui/warning_warden_thorns.png` (64×128): the upper 64×64 frame is the base artwork, and the lower frame is a transparent overlay for the blood-red tips. Keep the frame dimensions when editing and save before pressing Reload images. This button does not reload the mod logo, code, language, settings, sounds or worlds.
-
-Local caches, development worlds, IDE files, and build outputs are excluded from Git. Authoring tools, previews, store-page drafts and historical backups are kept outside the repository and are not required to build or run the mod.
-
-## License
-
-**All Rights Reserved — Copyright (c) 2026 Gareyn_.** See [`LICENSE`](LICENSE) for the full terms, including permission for personal gameplay and private modifications. Redistribution, re-uploads and reuse in distributed projects require separate permission except where prior licenses, platform terms or law already grant those rights. This notice does not revoke licenses validly granted for earlier copies. The license is also included in the built JAR.
+**Gareyn_ · All Rights Reserved.** See [LICENSE](LICENSE).

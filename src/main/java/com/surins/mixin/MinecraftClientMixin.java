@@ -13,7 +13,8 @@ public class MinecraftClientMixin {
 
     @Inject(method = "hasOutline", at = @At("RETURN"), cancellable = true)
     private void onHasOutline(Entity entity, CallbackInfoReturnable<Boolean> cir) {
-        if (entity != null && entity == SixthSenseClient.currentGlowingEntity) {
+        if (entity != null && entity == SixthSenseClient.currentGlowingEntity
+                && SixthSenseClient.warningsAllowed((MinecraftClient) (Object) this)) {
             cir.setReturnValue(true);
         }
     }

@@ -103,6 +103,8 @@ public final class WardenThreatTracker {
         }
     }
 
+    static void suspend() { request = null; result = null; }
+
     public static void reset() {
         currentWorld = null;
         currentPlayer = null;

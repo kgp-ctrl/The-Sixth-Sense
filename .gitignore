@@ -43,3 +43,7 @@ replay_*.log
 backups/
 __pycache__/
 *.pyc
+
+# Local runtime output
+logs/
+crash-reports/

@@ -1,19 +1,28 @@
 {
-	"required": true,
-	"package": "com.surins.mixin",
-	"compatibilityLevel": "JAVA_21",
-	"mixins": [
-		"BossBarHudAccessor",
-		"MinecraftClientMixin"
-	],
-	"client": [
-        "ClientPlayNetworkHandlerMixin",
-        "GhastWorldEventMixin"
-	],
-	"injectors": {
-		"defaultRequire": 1
-	},
-	"overwrites": {
-		"requireAnnotations": true
-	}
+  "required": true,
+  "package": "com.surins.mixin",
+  "compatibilityLevel": "JAVA_21",
+  "mixins": [
+    "SenseSleepMixin",
+    "SenseStealthMixin",
+    "SenseAttackMixin"
+  ],
+  "client": [
+    "ClientPlayNetworkHandlerMixin",
+    "GhastWorldEventMixin",
+    "CrosshairMixin",
+    "WhisperHeartMixin",
+    "SenseFovMixin",
+    "SenseFogMixin",
+    "SenseVisibilityMixin",
+    "SenseScreenMixin",
+    "BossBarHudAccessor",
+    "MinecraftClientMixin"
+  ],
+  "injectors": {
+    "defaultRequire": 1
+  },
+  "overwrites": {
+    "requireAnnotations": true
+  }
 }

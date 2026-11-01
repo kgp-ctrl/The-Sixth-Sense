@@ -1,6 +1,7 @@
 package com.surins.mixin;
 
 import com.surins.WardenThreatTracker;
+import com.surins.PhantomThreatTracker;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.network.ClientPlayNetworkHandler;
 import net.minecraft.network.packet.s2c.play.EntityDamageS2CPacket;
@@ -15,5 +16,6 @@ public class ClientPlayNetworkHandlerMixin {
     @Inject(method = "onEntityDamage", at = @At("TAIL"))
     private void sixthsense$onEntityDamage(EntityDamageS2CPacket packet, CallbackInfo ci) {
         WardenThreatTracker.onDamage(MinecraftClient.getInstance(), packet);
+        PhantomThreatTracker.onDamage(MinecraftClient.getInstance(), packet);
     }
 }

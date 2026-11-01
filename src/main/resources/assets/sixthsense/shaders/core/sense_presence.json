@@ -1,0 +1,86 @@
+{
+  "vertex": "sixthsense:sense_presence",
+  "fragment": "sixthsense:sense_presence",
+  "samplers": [
+    {
+      "name": "Sampler0"
+    }
+  ],
+  "attributes": [
+    "Position",
+    "UV0",
+    "Color"
+  ],
+  "uniforms": [
+    {
+      "name": "ModelViewMat",
+      "type": "matrix4x4",
+      "count": 16,
+      "values": [
+        1,
+        0,
+        0,
+        0,
+        0,
+        1,
+        0,
+        0,
+        0,
+        0,
+        1,
+        0,
+        0,
+        0,
+        0,
+        1
+      ]
+    },
+    {
+      "name": "ProjMat",
+      "type": "matrix4x4",
+      "count": 16,
+      "values": [
+        1,
+        0,
+        0,
+        0,
+        0,
+        1,
+        0,
+        0,
+        0,
+        0,
+        1,
+        0,
+        0,
+        0,
+        0,
+        1
+      ]
+    },
+    {
+      "name": "PresenceAlpha",
+      "type": "float",
+      "count": 1,
+      "values": [
+        0.4
+      ]
+    },
+    {
+      "name": "NoiseStep",
+      "type": "float",
+      "count": 1,
+      "values": [
+        0
+      ]
+    },
+    {
+      "name": "Awareness",
+      "type": "float",
+      "count": 1,
+      "values": [
+        0
+      ]
+    }
+  ]
+}

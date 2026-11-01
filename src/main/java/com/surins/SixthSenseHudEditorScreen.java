@@ -31,6 +31,18 @@ public class SixthSenseHudEditorScreen extends Screen {
         WARDEN
     }
 
+    /** Crosshair warnings are previews only, never draggable HUD positions. */
+    private enum DebugElement {
+        RAID(HudElement.RAID, "element.raid"), BOW(HudElement.BOW, "element.bow"),
+        CROSSBOW(HudElement.CROSSBOW, "element.crossbow"), EXPLOSION(HudElement.EXPLOSION, "element.explosion"),
+        GHAST(HudElement.GHAST, "element.ghast"), SHULKER(HudElement.SHULKER, "element.shulker"),
+        WARDEN(HudElement.WARDEN, "element.warden"), PHANTOM(null, "config.phantom"), AIM(null, "config.aim");
+        final HudElement movable;
+        final String label;
+        DebugElement(HudElement movable, String label) { this.movable = movable; this.label = label; }
+    }
+    private static final DebugElement[] DEBUG_ELEMENTS = DebugElement.values();
+
     private static final class PreviewBounds {
         final float x;
         final float y;
@@ -81,6 +93,8 @@ public class SixthSenseHudEditorScreen extends Screen {
         int gridButtonX() {
             return virtualWidth - getDebugButtonWidth() - getGridButtonWidth() - 12;
         }
+
+        int settingsButtonX() { return gridButtonX() - getSettingsButtonWidth() - 8; }
 
         int debugButtonX() {
             return virtualWidth - getDebugButtonWidth() - 4;
@@ -152,7 +166,12 @@ public class SixthSenseHudEditorScreen extends Screen {
     private static final int SELECTED_BORDER_COLOR = 0xFFFFFF55;
 
     private final Map<HudElement, PreviewBounds> previewBounds = new EnumMap<>(HudElement.class);
-    private final Map<HudElement, PreviewBounds> debugBounds = new EnumMap<>(HudElement.class);
+    private final Map<DebugElement, PreviewBounds> debugBounds = new EnumMap<>(DebugElement.class);
+    private final PhantomCrosshair.State phantomPreview = new PhantomCrosshair.State();
+    private final ReticleAnimation aimPreview = new ReticleAnimation();
+    private DebugElement hoveredDebug;
+    private long debugHoverStarted;
+    private float debugGalleryUnit, debugTitleY;
     private final HudAnimationMath.WardenClock previewClock = new HudAnimationMath.WardenClock();
     private final WardenHudMotion previewMotion = new WardenHudMotion();
     private boolean gridEnabled;
@@ -174,6 +193,10 @@ public class SixthSenseHudEditorScreen extends Screen {
         this.debugStartTime = System.currentTimeMillis();
     }
 
+    @Override protected void init() {
+        gridEnabled = SixthSenseConfig.instance.editorGridEnabled;
+    }
+
     @Override
     public boolean shouldPause() {
         return false;
@@ -181,22 +204,18 @@ public class SixthSenseHudEditorScreen extends Screen {
 
     @Override
     public void render(DrawContext drawContext, int mouseX, int mouseY, float delta) {
-        buildPreviewBounds();
-
-        if (gridEnabled) {
-            drawGrid(drawContext);
-        }
-
-        for (HudElement element : HudElement.values()) {
-            drawElement(drawContext, element, previewBounds.get(element), false,
-                    isElementEnabled(element) ? 1.0f : 0.35f);
-        }
-
-        drawEditorChrome(drawContext, mouseX, mouseY);
-
         if (debugMode) {
+            super.renderBackground(drawContext,mouseX,mouseY,delta);
             renderDebugOverlay(drawContext, mouseX, mouseY);
+            drawSectionTooltip(drawContext, mouseX, mouseY, true);
         } else {
+            buildPreviewBounds();
+            if (gridEnabled) drawGrid(drawContext);
+            for (HudElement element : HudElement.values()) {
+                drawElement(drawContext, element, previewBounds.get(element), false,
+                        isElementEnabled(element) ? 1.0f : 0.35f);
+            }
+            drawEditorChrome(drawContext, mouseX, mouseY);
             setCursorHidden(false);
         }
 
@@ -264,7 +283,7 @@ public class SixthSenseHudEditorScreen extends Screen {
         drawContext.getMatrices().scale(footer.scale, footer.scale, 1.0f);
 
         drawContext.fill(0, 0, footer.virtualWidth, FOOTER_HEIGHT, PANEL_COLOR);
-        int controlStartX = footer.gridButtonX() - 8;
+        int controlStartX = footer.settingsButtonX() - 8;
         drawContext.drawTextWithShadow(textRenderer, getFooterInstructions(controlStartX - 8), 8, 7, 0xFFDDDDDD);
 
         if (selectedElement != null) {
@@ -276,10 +295,29 @@ public class SixthSenseHudEditorScreen extends Screen {
             }
         }
 
-        drawButton(drawContext, footer.gridButtonX(), footer.buttonY(), getGridButtonWidth(),
-                string("editor.grid", string(gridEnabled ? "state.on" : "state.off")), gridEnabled);
-        drawButton(drawContext, footer.debugButtonX(), footer.buttonY(), getDebugButtonWidth(), string("editor.debug"), debugMode);
+        drawIconButton(drawContext, footer.settingsButtonX(), footer.buttonY(), EditorIcons.SETTINGS, false);
+        drawIconButton(drawContext, footer.gridButtonX(), footer.buttonY(), EditorIcons.GRID, gridEnabled);
+        drawIconButton(drawContext, footer.debugButtonX(), footer.buttonY(), EditorIcons.DEBUG, debugMode);
         drawContext.getMatrices().pop();
+        drawSectionTooltip(drawContext, mouseX, mouseY, false);
+    }
+
+    private void drawIconButton(DrawContext context, int x, int y, EditorIcons icon, boolean active) {
+        drawButton(context,x,y,BUTTON_HEIGHT,"",active);
+        icon.draw(context,x+1,y+1,BUTTON_HEIGHT-2);
+    }
+
+    private void drawSectionTooltip(DrawContext context, int mouseX, int mouseY, boolean debugOnly) {
+        FooterLayout footer = getFooterLayout();
+        float x = footer.virtualX(mouseX), y = footer.virtualY(mouseY);
+        Text label = null;
+        if (isInsideVirtualButton(x,y,footer.debugButtonX(),footer.buttonY(),getDebugButtonWidth()))
+            label = SixthSenseLanguage.text("editor.debug");
+        else if (!debugOnly && isInsideVirtualButton(x,y,footer.settingsButtonX(),footer.buttonY(),getSettingsButtonWidth()))
+            label = SixthSenseLanguage.text("editor.technical");
+        else if (!debugOnly && isInsideVirtualButton(x,y,footer.gridButtonX(),footer.buttonY(),getGridButtonWidth()))
+            label = SixthSenseLanguage.text("editor.grid",string(gridEnabled ? "state.on" : "state.off"));
+        if (label != null) context.drawTooltip(textRenderer,label,mouseX,mouseY);
     }
 
     private String getFooterInstructions(int availableWidth) {
@@ -306,14 +344,13 @@ public class SixthSenseHudEditorScreen extends Screen {
     }
 
     private void drawButton(DrawContext drawContext, int x, int y, int buttonWidth, String label, boolean active) {
-        int fillColor = active ? 0xB05C7FA3 : 0xA0333333;
-        drawContext.fill(x, y, x + buttonWidth, y + BUTTON_HEIGHT, fillColor);
-        drawContext.drawBorder(x, y, buttonWidth, BUTTON_HEIGHT, active ? 0xFFFFFFFF : 0xFF777777);
+        drawContext.drawGuiTexture(net.minecraft.util.Identifier.ofVanilla(active ? "widget/button_highlighted" : "widget/button"),
+                x,y,buttonWidth,BUTTON_HEIGHT);
         float labelScale = Math.min(1.0f, (buttonWidth - 8.0f) / Math.max(1, textRenderer.getWidth(label)));
         drawContext.getMatrices().push();
         drawContext.getMatrices().translate(x + buttonWidth / 2.0f, y + (BUTTON_HEIGHT - textRenderer.fontHeight * labelScale) / 2.0f, 0);
         drawContext.getMatrices().scale(labelScale, labelScale, 1.0f);
-        drawContext.drawCenteredTextWithShadow(textRenderer, Text.literal(label), 0, 0, TEXT_COLOR);
+        drawContext.drawCenteredTextWithShadow(textRenderer, Text.literal(label), 0, 0, debugMode ? VanillaUi.TEXT : TEXT_COLOR);
         drawContext.getMatrices().pop();
     }
 
@@ -435,25 +472,12 @@ public class SixthSenseHudEditorScreen extends Screen {
         drawWarningSprite(drawContext, WARNING_GHAST, bounds,
                 animated ? GhastAnimationClock.previewFrame(System.currentTimeMillis() - debugStartTime) : 0,
                 32, 32, HudCharacterAnimation.TEXTURE_HEIGHT, alpha, null);
-        drawGhastDistance(drawContext, "48m", bounds.x, bounds.y, bounds.scale, alpha);
+        if (SixthSenseConfig.instance.showGhastDistance) drawGhastDistance(drawContext, "48m", bounds.x, bounds.y, bounds.scale, alpha);
     }
 
     private void drawGhastDistance(DrawContext drawContext, String distanceText, float drawX, float drawY,
                                    float iconScale, float alpha) {
-        float iconSize = ORIGINAL_FRAME_SIZE * iconScale;
-        int nativeWidth = Math.max(1, textRenderer.getWidth(distanceText));
-        int nativeHeight = Math.max(1, textRenderer.fontHeight);
-        float textScale = Math.min(0.62f * iconScale,
-                Math.min(iconSize * 0.72f / nativeWidth, iconSize * 0.50f / nativeHeight));
-        float textX = drawX + iconSize - nativeWidth * textScale - 0.5f;
-        float textY = drawY + iconSize - nativeHeight * textScale - 0.5f;
-        int textColor = ((int) (alpha * 255) << 24) | 0xFFFFFF;
-
-        drawContext.getMatrices().push();
-        drawContext.getMatrices().translate(textX, textY, 0);
-        drawContext.getMatrices().scale(textScale, textScale, 1.0f);
-        drawContext.drawText(textRenderer, distanceText, 0, 0, textColor, true);
-        drawContext.getMatrices().pop();
+        HudAnnotationRenderer.draw(drawContext,distanceText,drawX,drawY,iconScale,alpha,true);
     }
 
     private void drawWardenPreview(DrawContext drawContext, PreviewBounds bounds, boolean animated, float alpha) {
@@ -477,16 +501,23 @@ public class SixthSenseHudEditorScreen extends Screen {
         drawContext.drawTexture(WARNING_ARROW, -8, -8, 0, 0, 16, 16, 16, 16);
         drawContext.getMatrices().pop();
 
-        if (heartbeat.motionBlurAlpha() > 0.0f) {
+        if (!SixthSenseConfig.instance.reduceMotion && heartbeat.motionBlurAlpha() > 0.0f) {
             drawContext.setShaderColor(1.0f, 1.0f, 1.0f, alpha * heartbeat.motionBlurAlpha());
             drawWardenHeart(drawContext, centerX - heartbeat.jitterX * 0.6f,
                     centerY - heartbeat.jitterY * 0.6f, scale * heartbeat.scaleMultiplier * 0.985f, frame);
         }
 
         drawContext.setShaderColor(1.0f, 1.0f, 1.0f, alpha);
-        drawWardenHeart(drawContext, centerX + heartbeat.jitterX, centerY + heartbeat.jitterY,
-                scale * heartbeat.scaleMultiplier, frame);
+        drawWardenHeart(drawContext, centerX + (SixthSenseConfig.instance.reduceMotion ? 0 : heartbeat.jitterX), centerY + (SixthSenseConfig.instance.reduceMotion ? 0 : heartbeat.jitterY),
+                scale * (SixthSenseConfig.instance.reduceMotion ? .7f : heartbeat.scaleMultiplier), frame);
         drawContext.setShaderColor(1.0f, 1.0f, 1.0f, 1.0f);
+        if (SixthSenseConfig.instance.showWardenDistance) {
+            drawContext.getMatrices().push();
+            drawContext.getMatrices().scale(.6f, .6f, 1);
+            drawContext.drawText(textRenderer, "12m", (int)(centerX / .6f), (int)((bounds.y + 6 * scale) / .6f),
+                    ((int)(alpha * 255) << 24) | 0xFFFFFF, true);
+            drawContext.getMatrices().pop();
+        }
         if (animated) {
             float impact = WardenImpactMemory.pulseAt(Math.max(0, demoTime - 2300) / 1000.0);
             WardenReticleRenderer.draw(drawContext, centerX, centerY, scale,
@@ -504,53 +535,98 @@ public class SixthSenseHudEditorScreen extends Screen {
 
     private void drawPreviewCount(DrawContext drawContext, String countText, float drawX, float drawY,
                                   float iconScale, float alpha) {
-        float iconSize = ORIGINAL_FRAME_SIZE * iconScale;
-        float maxTextWidth = iconSize * 0.86f;
-        float maxTextHeight = iconSize * 0.62f;
-        float textScale = Math.min(0.76f * iconScale, maxTextHeight / textRenderer.fontHeight);
-        textScale = Math.min(textScale, maxTextWidth / textRenderer.getWidth(countText));
-        float textWidth = textRenderer.getWidth(countText) * textScale;
-        float textHeight = textRenderer.fontHeight * textScale;
-
-        drawContext.getMatrices().push();
-        drawContext.getMatrices().translate(drawX + iconSize - textWidth - 0.5f,
-                drawY + iconSize - textHeight - 0.5f, 0);
-        drawContext.getMatrices().scale(textScale, textScale, 1.0f);
-        drawContext.drawText(textRenderer, countText, 0, 0, ((int) (alpha * 255) << 24) | 0xFFFFFF, true);
-        drawContext.getMatrices().pop();
+        HudAnnotationRenderer.draw(drawContext,countText,drawX,drawY,iconScale,alpha,false);
     }
 
     private int getAnimationFrame(int frameCount, int frameDelay) {
         return (int) ((System.currentTimeMillis() - debugStartTime) / frameDelay) % frameCount;
     }
 
-    private void renderDebugOverlay(DrawContext drawContext, int mouseX, int mouseY) {
+    private void renderDebugOverlay(DrawContext context, int mouseX, int mouseY) {
         buildDebugBounds();
-        HudElement hoveredElement = findElementAtName(debugBounds, mouseX, mouseY);
-
-        // Draw the preview and its controls above the dimmed layout editor.
-        drawContext.fill(0, 0, width, height, 0xB8000000);
-        drawScaledCenteredText(drawContext, string("editor.debug_help"), width / 2.0f,
-                getDebugTitleY(), 0.76f * getDebugUnit(), 0xFFE5F2FF);
-
-        for (HudElement element : HudElement.values()) {
-            PreviewBounds bounds = debugBounds.get(element);
-            boolean animated = element == hoveredElement;
-            int cardColor = animated ? 0xC0355067 : 0x8A1E272E;
-            int borderColor = animated ? 0xFFB8E3FF : BORDER_COLOR;
-            drawContext.fill(Math.round(bounds.hitX), Math.round(bounds.hitY),
-                    Math.round(bounds.hitX + bounds.hitWidth), Math.round(bounds.hitY + bounds.hitHeight), cardColor);
-            drawContext.drawBorder(Math.round(bounds.hitX), Math.round(bounds.hitY),
-                    Math.round(bounds.hitWidth), Math.round(bounds.hitHeight), borderColor);
-            drawElement(drawContext, element, bounds, animated, animated ? 1.0f : 0.50f);
-            drawScaledCenteredText(drawContext, getElementLabel(element), bounds.hitX + bounds.hitWidth / 2.0f,
-                    bounds.hitY + bounds.hitHeight - 10.0f * getDebugUnit(), 0.70f * getDebugUnit(),
-                    animated ? 0xFFFFFFFF : 0xFFBBC6CE);
+        DebugElement hovered = null;
+        for (DebugElement element : DEBUG_ELEMENTS) {
+            if (debugBounds.get(element).contains(mouseX, mouseY)) hovered = element;
         }
+        long now = System.nanoTime();
+        if (hovered != hoveredDebug) {
+            hoveredDebug = hovered;
+            debugHoverStarted = now;
+            aimPreview.reset();
+        }
+        float chrome = getChromeScale();
+        context.getMatrices().push();
+        context.getMatrices().translate(12, 12, 0);
+        context.getMatrices().scale(chrome, chrome, 1);
+        context.drawTextWithShadow(textRenderer, SixthSenseLanguage.text("editor.debug"), 0, 0, VanillaUi.TEXT);
+        context.fill(0, 14, 48, 15, VanillaUi.ACCENT);
+        context.getMatrices().pop();
+        drawScaledCenteredText(context, string("editor.debug_help"), width / 2.0f,
+                debugTitleY, debugTextScale(0.76f * debugGalleryUnit), VanillaUi.MUTED);
 
-        drawDebugButtonOnly(drawContext);
-        drawImageReloadControl(drawContext, mouseX, mouseY);
-        setCursorHidden(hoveredElement != null && !confirmResetAll);
+        for (DebugElement element : DEBUG_ELEMENTS) {
+            PreviewBounds bounds = debugBounds.get(element);
+            boolean animated = element == hovered;
+            context.fill(Math.round(bounds.hitX), Math.round(bounds.hitY),
+                    Math.round(bounds.hitX + bounds.hitWidth), Math.round(bounds.hitY + bounds.hitHeight),
+                    animated ? VanillaUi.ACTIVE_PANEL : VanillaUi.PANEL);
+            context.drawBorder(Math.round(bounds.hitX), Math.round(bounds.hitY),
+                    Math.round(bounds.hitWidth), Math.round(bounds.hitHeight),
+                    animated ? VanillaUi.ACCENT : VanillaUi.BORDER);
+            if (element.movable != null) {
+                drawElement(context, element.movable, bounds, animated, animated ? 1.0f : 0.65f);
+            } else {
+                drawCrosshairPreview(context, element, bounds, animated, now);
+            }
+            String label = string(element.label);
+            float labelScale = debugTextScale(0.70f * debugGalleryUnit);
+            int labelWidth = Math.max(1, (int)((bounds.hitWidth - 8 * debugGalleryUnit) / labelScale));
+            if (textRenderer.getWidth(label) > labelWidth) {
+                label = textRenderer.trimToWidth(label, Math.max(1, labelWidth - textRenderer.getWidth("…"))) + "…";
+            }
+            drawScaledCenteredText(context, label, bounds.hitX + bounds.hitWidth / 2.0f,
+                    bounds.hitY + bounds.hitHeight - 10.0f * debugGalleryUnit, labelScale,
+                    animated ? VanillaUi.TEXT : VanillaUi.MUTED);
+        }
+        drawDebugButtonOnly(context);
+        drawImageReloadControl(context, mouseX, mouseY);
+        setCursorHidden(hovered != null && !confirmResetAll);
+    }
+
+    private float debugTextScale(float preferred) {
+        // Whole physical pixels keep Minecraft's bitmap font legible in small windows.
+        float guiScale = Math.max(1, (float) client.getWindow().getScaleFactor());
+        return Math.max(1, Math.round(preferred * guiScale)) / guiScale;
+    }
+
+    private void drawCrosshairPreview(DrawContext context, DebugElement element, PreviewBounds bounds,
+                                      boolean animated, long now) {
+        long phase = Math.floorMod((now - debugHoverStarted) / 1_000_000L, 4400);
+        float opacity = animated ? 1 : .7f;
+        context.getMatrices().push();
+        context.getMatrices().translate(bounds.x + bounds.width / 2, bounds.y + bounds.height / 2, 0);
+        context.getMatrices().scale(bounds.scale, bounds.scale, 1);
+        int y = element == DebugElement.PHANTOM ? 3 : 0;
+        int cross = Math.round(255 * opacity) << 24 | 0xD6D1C3;
+        context.fill(-4, y, 5, y + 1, cross);
+        context.fill(0, y - 4, 1, y, cross);
+        context.fill(0, y + 1, 1, y + 5, cross);
+        if (element == DebugElement.PHANTOM) {
+            // Use the real glyph and the same eye/fade state as gameplay.
+            long hitAt = animated && phase >= 2100 ? now - (phase - 2100) * 1_000_000L : 0;
+            double distance = 24 - 22 * Math.max(0, Math.min(1, (phase - 800) / 1300.0));
+            phantomPreview.update(!animated || phase < 3600, animated && phase >= 800 && phase < 2100,
+                    distance, hitAt, now);
+            com.mojang.blaze3d.systems.RenderSystem.enableBlend();
+            com.mojang.blaze3d.systems.RenderSystem.defaultBlendFunc();
+            PhantomCrosshair.draw(context, .5f, PhantomCrosshair.centerY(y + .5f, 11.7f), 11.7f,
+                    phantomPreview.alpha(now) * opacity, phantomPreview.eyes(), phantomPreview.fold());
+            com.mojang.blaze3d.systems.RenderSystem.disableBlend();
+        } else {
+            aimPreview.target(animated && phase < 1800, now);
+            AimCrosshair.draw(context, 0, y, animated ? aimPreview.sample(now) : new ReticleAnimation.Frame(1), opacity);
+        }
+        context.getMatrices().pop();
     }
 
     private int getImageReloadWidth() {
@@ -622,59 +698,35 @@ public class SixthSenseHudEditorScreen extends Screen {
     private void buildDebugBounds() {
         debugBounds.clear();
         final int columns = 3;
+        final int rows = (DEBUG_ELEMENTS.length + columns - 1) / columns;
         float unit = getDebugUnit();
-        float cardWidth = 112.0f * unit;
-        float cardHeight = 58.0f * unit;
-        float gap = 12.0f * unit;
-        float titleHeight = 20.0f * unit;
-        float availableHeight = Math.max(1.0f, getFooterLayout().y - 8.0f - getDebugHeaderHeight());
-        float galleryWidth = columns * cardWidth + (columns - 1) * gap;
-        float galleryHeight = 3.0f * cardHeight + 2.0f * gap;
-        float fit = Math.min(1.0f, Math.min((width - 16.0f * unit) / galleryWidth,
-                (availableHeight - titleHeight) / galleryHeight));
-
-        // Keep the same physical target size across GUI scales, then only shrink when the window truly needs it.
-        unit *= Math.max(0.20f, fit);
-        cardWidth = 112.0f * unit;
-        cardHeight = 58.0f * unit;
-        gap = 12.0f * unit;
-        titleHeight = 20.0f * unit;
-        galleryHeight = 3.0f * cardHeight + 2.0f * gap;
-        float top = getDebugHeaderHeight() + Math.max(4.0f * unit, (availableHeight - titleHeight - galleryHeight) / 2.0f + titleHeight);
-
-        HudElement[] elements = HudElement.values();
-        for (int index = 0; index < elements.length; index++) {
-            HudElement element = elements[index];
-            int row = index / columns;
-            int column = index % columns;
-            int itemsInRow = Math.min(columns, elements.length - row * columns);
+        float availableHeight = Math.max(1, getFooterLayout().y - 8 - getDebugHeaderHeight());
+        float fit = Math.min(1, Math.min((width - 16) / ((columns * 112f + (columns - 1) * 12f) * unit),
+                availableHeight / ((rows * 58f + (rows - 1) * 12f + 20) * unit)));
+        unit *= Math.max(.05f, fit);
+        debugGalleryUnit = unit;
+        float cardWidth = 112 * unit, cardHeight = 58 * unit, gap = 12 * unit;
+        float galleryHeight = rows * cardHeight + (rows - 1) * gap;
+        debugTitleY = getDebugHeaderHeight() + Math.max(0, (availableHeight - galleryHeight - 20 * unit) / 2);
+        float top = debugTitleY + 20 * unit;
+        for (int index = 0; index < DEBUG_ELEMENTS.length; index++) {
+            DebugElement element = DEBUG_ELEMENTS[index];
+            int row = index / columns, column = index % columns;
+            int itemsInRow = Math.min(columns, DEBUG_ELEMENTS.length - row * columns);
             float rowWidth = itemsInRow * cardWidth + (itemsInRow - 1) * gap;
-            float cardX = (width - rowWidth) / 2.0f + column * (cardWidth + gap);
+            float cardX = (width - rowWidth) / 2 + column * (cardWidth + gap);
             float cardY = top + row * (cardHeight + gap);
-            float elementScale = 2.0f * unit;
-            if (element == HudElement.RAID) {
-                elementScale = Math.min(elementScale, (cardWidth - 12.0f * unit) / getRaidContentWidth());
+            float elementScale = (element == DebugElement.WARDEN ? 1.4f : 2) * unit;
+            if (element == DebugElement.RAID) {
+                elementScale = Math.min(elementScale, (cardWidth - 12 * unit) / getRaidContentWidth());
             }
-
-            int visualWidth = Math.max(1, Math.round((element == HudElement.RAID ? getRaidContentWidth() : ORIGINAL_FRAME_SIZE) * elementScale));
-            int visualHeight = Math.max(1, Math.round(ORIGINAL_FRAME_SIZE * elementScale));
-            float visualX = cardX + (cardWidth - visualWidth) / 2.0f;
-            float visualY = cardY + (cardHeight - visualHeight) / 2.0f - 4.0f * unit;
+            float visualWidth = (element == DebugElement.RAID ? getRaidContentWidth() : ORIGINAL_FRAME_SIZE) * elementScale;
+            float visualHeight = ORIGINAL_FRAME_SIZE * elementScale;
+            float visualX = cardX + (cardWidth - visualWidth) / 2;
+            float visualY = cardY + (cardHeight - visualHeight) / 2 - 4 * unit;
             debugBounds.put(element, new PreviewBounds(visualX, visualY, visualWidth, visualHeight, elementScale,
                     cardX, cardY, cardWidth, cardHeight));
         }
-    }
-
-    private float getDebugTitleY() {
-        float unit = getDebugUnit();
-        float availableHeight = Math.max(1.0f, getFooterLayout().y - 8.0f - getDebugHeaderHeight());
-        float galleryHeight = 3.0f * 58.0f * unit + 2.0f * 12.0f * unit;
-        float titleHeight = 20.0f * unit;
-        float fit = Math.min(1.0f, Math.min((width - 16.0f * unit) / (3.0f * 112.0f * unit + 2.0f * 12.0f * unit),
-                (availableHeight - titleHeight) / galleryHeight));
-        unit *= Math.max(0.20f, fit);
-        float finalGalleryHeight = 3.0f * 58.0f * unit + 2.0f * 12.0f * unit;
-        return getDebugHeaderHeight() + Math.max(4.0f * unit, (availableHeight - 20.0f * unit - finalGalleryHeight) / 2.0f + 5.0f * unit);
     }
 
     private void drawDebugButtonOnly(DrawContext drawContext) {
@@ -682,7 +734,10 @@ public class SixthSenseHudEditorScreen extends Screen {
         drawContext.getMatrices().push();
         drawContext.getMatrices().translate(footer.x, footer.y, 0);
         drawContext.getMatrices().scale(footer.scale, footer.scale, 1.0f);
-        drawButton(drawContext, footer.debugButtonX(), footer.buttonY(), getDebugButtonWidth(), string("editor.debug"), true);
+        drawContext.fill(0, 0, footer.virtualWidth, FOOTER_HEIGHT, VanillaUi.PANEL);
+        drawContext.fill(0, 0, footer.virtualWidth, 1, VanillaUi.BORDER);
+        drawContext.drawTextWithShadow(textRenderer, SixthSenseLanguage.text("editor.debug"), 8, 9, VanillaUi.MUTED);
+        drawIconButton(drawContext, footer.debugButtonX(), footer.buttonY(), EditorIcons.DEBUG, true);
         drawContext.getMatrices().pop();
     }
 
@@ -743,15 +798,9 @@ public class SixthSenseHudEditorScreen extends Screen {
         };
     }
 
-    private int getGridButtonWidth() {
-        return Math.max(54, Math.max(
-                textRenderer.getWidth(string("editor.grid", string("state.on"))),
-                textRenderer.getWidth(string("editor.grid", string("state.off")))) + 12);
-    }
-
-    private int getDebugButtonWidth() {
-        return Math.max(58, textRenderer.getWidth(string("editor.debug")) + 12);
-    }
+    private int getGridButtonWidth() { return BUTTON_HEIGHT; }
+    private int getSettingsButtonWidth() { return BUTTON_HEIGHT; }
+    private int getDebugButtonWidth() { return BUTTON_HEIGHT; }
 
     private FooterLayout getFooterLayout() {
         float scale = getChromeScale();
@@ -766,7 +815,7 @@ public class SixthSenseHudEditorScreen extends Screen {
         }
         float guiScale = Math.max(1.0f, (float) client.getWindow().getScaleFactor());
         float preferred = Math.min(1.0f, 3.0f / guiScale);
-        float minimumFooterWidth = getGridButtonWidth() + getDebugButtonWidth() + 140.0f;
+        float minimumFooterWidth = getSettingsButtonWidth() + getGridButtonWidth() + getDebugButtonWidth() + 148.0f;
         return Math.min(preferred, Math.max(0.1f, (width - FOOTER_MARGIN * 2.0f) / minimumFooterWidth));
     }
 
@@ -800,6 +849,13 @@ public class SixthSenseHudEditorScreen extends Screen {
             FooterLayout footer = getFooterLayout();
             float virtualX = footer.virtualX(mouseX);
             float virtualY = footer.virtualY(mouseY);
+            if (!debugMode && isInsideVirtualButton(virtualX, virtualY, footer.settingsButtonX(), footer.buttonY(), getSettingsButtonWidth())) {
+                setCursorHidden(false);
+                draggingElement = null;
+                SixthSenseConfig.save();
+                client.setScreen(new SixthSenseTechnicalScreen(this));
+                return true;
+            }
             if (isInsideVirtualButton(virtualX, virtualY, footer.debugButtonX(), footer.buttonY(), getDebugButtonWidth())) {
                 toggleDebugMode();
                 return true;
@@ -916,7 +972,7 @@ public class SixthSenseHudEditorScreen extends Screen {
             return true;
         }
 
-        if (keyCode == GLFW.GLFW_KEY_R) {
+        if (keyCode == GLFW.GLFW_KEY_R && !debugMode) {
             if ((modifiers & GLFW.GLFW_MOD_SHIFT) != 0) {
                 confirmResetAll = true;
                 setCursorHidden(false);
@@ -954,12 +1010,12 @@ public class SixthSenseHudEditorScreen extends Screen {
         drawContext.fill(0, 0, layout.virtualWidth, layout.virtualHeight, 0xF01B2228);
         drawContext.drawBorder(0, 0, layout.virtualWidth, layout.virtualHeight, 0xFFE5B95A);
         int textY = 8;
-        for (var line : textRenderer.wrapLines(SixthSenseLanguage.text("editor.reset_title"), layout.virtualWidth - 24)) {
+        for (var line : SixthSenseLanguage.wrap(textRenderer, SixthSenseLanguage.text("editor.reset_title"), layout.virtualWidth - 24)) {
             drawContext.drawTextWithShadow(textRenderer, line, 12, textY, 0xFFFFFFFF);
             textY += textRenderer.fontHeight + 2;
         }
         textY += 4;
-        for (var line : textRenderer.wrapLines(SixthSenseLanguage.text("editor.reset_body"), layout.virtualWidth - 24)) {
+        for (var line : SixthSenseLanguage.wrap(textRenderer, SixthSenseLanguage.text("editor.reset_body"), layout.virtualWidth - 24)) {
             drawContext.drawTextWithShadow(textRenderer, line, 12, textY, 0xFFDDDDDD);
             textY += textRenderer.fontHeight + 2;
         }
@@ -971,8 +1027,8 @@ public class SixthSenseHudEditorScreen extends Screen {
     private ConfirmationLayout getConfirmationLayout() {
         float scale = getChromeScale();
         int virtualWidth = Math.max(80, Math.min(320, (int) ((width - 16) / scale)));
-        int lines = textRenderer.wrapLines(SixthSenseLanguage.text("editor.reset_title"), virtualWidth - 24).size()
-                + textRenderer.wrapLines(SixthSenseLanguage.text("editor.reset_body"), virtualWidth - 24).size();
+        int lines = SixthSenseLanguage.wrap(textRenderer, SixthSenseLanguage.text("editor.reset_title"), virtualWidth - 24).size()
+                + SixthSenseLanguage.wrap(textRenderer, SixthSenseLanguage.text("editor.reset_body"), virtualWidth - 24).size();
         int virtualHeight = 40 + lines * (textRenderer.fontHeight + 2);
         scale = Math.min(scale, Math.max(0.1f, (height - 16.0f) / virtualHeight));
         float x = (width - virtualWidth * scale) / 2.0f;

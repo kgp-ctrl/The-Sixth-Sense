@@ -1,0 +1,19 @@
+{
+  "vertex": "sixthsense:arc_fill",
+  "fragment": "sixthsense:sense_contour",
+  "samplers": [
+    {
+      "name": "Sampler0"
+    }
+  ],
+  "attributes": [
+    "Position",
+    "UV0"
+  ],
+  "uniforms": [],
+  "blend": {
+    "func": "add",
+    "srcrgb": "srcalpha",
+    "dstrgb": "1-srcalpha"
+  }
+}
